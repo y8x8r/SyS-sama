@@ -429,7 +429,7 @@ export const serviceConfigs: Record<string, ServiceConfig> = {
     fields: [
       { name: "customerName", labelKey: "f_customer_name", type: "text", fromCustomer: "fullName", required: true },
       { name: "passportNumber", labelKey: "f_passport", type: "text" },
-      { name: "phoneNumber", labelKey: "f_phone", type: "tel", fromCustomer: "phoneNumber" },
+      { name: "phoneNumber", labelKey: "f_phone", type: "tel", hideInForm: true },
       { name: "email", labelKey: "f_email", type: "text", placeholder: "email@example.com" },
       { name: "examProfession", labelKey: "f_exam_profession", type: "text", placeholder: "مثال: هندسة، طب..." },
       { name: "passwordField", labelKey: "f_password_field", type: "text", placeholder: "—" },
@@ -446,7 +446,7 @@ export const serviceConfigs: Record<string, ServiceConfig> = {
     fields: [
       { name: "customerName", labelKey: "f_customer_name", type: "text", fromCustomer: "fullName", required: true },
       { name: "passportNumber", labelKey: "f_passport", type: "text" },
-      { name: "phoneNumber", labelKey: "f_phone", type: "tel", fromCustomer: "phoneNumber" },
+      { name: "phoneNumber", labelKey: "f_phone", type: "tel", hideInForm: true },
       { name: "requirements", labelKey: "f_requirements", type: "textarea", span2: true },
     ],
   },
@@ -459,7 +459,7 @@ export const serviceConfigs: Record<string, ServiceConfig> = {
     fields: [
       { name: "customerName", labelKey: "f_customer_name", type: "text", fromCustomer: "fullName", required: true },
       { name: "passportNumber", labelKey: "f_passport", type: "text" },
-      { name: "phoneNumber", labelKey: "f_phone", type: "tel", fromCustomer: "phoneNumber" },
+      { name: "phoneNumber", labelKey: "f_phone", type: "tel", hideInForm: true },
       { name: "visaDuration", labelKey: "f_visa_duration", type: "text", placeholder: "مثال: 72 ساعة" },
       { name: "motherName", labelKey: "f_mother_name", type: "text" },
     ],

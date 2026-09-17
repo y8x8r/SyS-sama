@@ -84,6 +84,7 @@ export interface FieldDef {
   fromCustomer?: "fullName" | "customerNumber" | "phoneNumber" | "passportNumber" | "nationalId";
   computed?: boolean;
   hideInTable?: boolean;
+  hideInForm?: boolean;
   span2?: boolean;
 }
 
@@ -896,7 +897,7 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
             </DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
-            {allFields.map(renderField)}
+            {allFields.filter((f) => !f.hideInForm).map(renderField)}
           </div>
           <DialogFooter className="gap-2 sm:gap-2">
             <Button variant="outline" onClick={() => handleDialogChange(false)}>{tr(lang, "cancel")}</Button>
