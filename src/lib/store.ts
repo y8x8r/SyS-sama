@@ -637,7 +637,12 @@ export const useAppStore = create<AppState>()((set, get) => ({
       });
       const data = await res.json();
       if (data.ok) {
-        await get().fetchAllData();
+        // إعادة جلب الموظفين فقط (2 طلب بدلاً من 12)
+        const empRes = await fetch("/api/employees", { credentials: "include" });
+        const empData = await empRes.json();
+        if (empData.ok) {
+          set({ employees: empData.employees, users: empData.users });
+        }
         return { ok: true };
       }
       return { ok: false, error: data.error };
@@ -651,7 +656,15 @@ export const useAppStore = create<AppState>()((set, get) => ({
       const res = await fetch(`/api/employees/${id}`, { method: "DELETE", credentials: "include" });
       const data = await res.json();
       if (data.ok) {
-        await get().fetchAllData();
+        // إزالة محلية + إعادة جلب الموظفين
+        set((s) => ({
+          employees: s.employees.filter((e) => e.id !== id),
+        }));
+        const empRes = await fetch("/api/employees", { credentials: "include" });
+        const empData = await empRes.json();
+        if (empData.ok) {
+          set({ employees: empData.employees, users: empData.users });
+        }
       }
     } catch {}
   },
@@ -761,8 +774,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
       if (data.ok) {
         const newS = parseService(data.service);
         set((st) => ({ services: [newS, ...st.services] }));
-        // تحديث البيانات المرتبطة (الفواتير، المدفوعات، الإشعارات، الإحصائيات)
-        await get().fetchAllData();
+        // تحديث الإحصائيات فقط (1 طلب بدلاً من 12)
+        await get().fetchDashboardStats();
         return newS;
       }
       return null;
@@ -784,7 +797,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
         set((s) => ({
           services: s.services.map((srv) => (srv.id === id ? updated : srv)),
         }));
-        await get().fetchAllData();
+        // تحديث الإحصائيات فقط (1 طلب بدلاً من 12)
+        await get().fetchDashboardStats();
       }
     } catch {}
   },
@@ -798,7 +812,12 @@ export const useAppStore = create<AppState>()((set, get) => ({
       });
       const data = await res.json();
       if (data.ok) {
-        await get().fetchAllData();
+        // تحديث محلي بدلاً من fetchAllData (12 طلبات)
+        if (data.service) {
+          const updated = parseService(data.service);
+          set((s) => ({ services: s.services.map((srv) => srv.id === id ? updated : srv) }));
+        }
+        await get().fetchDashboardStats();
       }
     } catch {}
   },
@@ -810,7 +829,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
       });
       const data = await res.json();
       if (data.ok) {
-        await get().fetchAllData();
+        // إزالة محلية بدلاً من fetchAllData
+        set((s) => ({ services: s.services.filter((srv) => srv.id !== id) }));
+        await get().fetchDashboardStats();
       }
     } catch {}
   },
@@ -824,7 +845,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
       });
       const data = await res.json();
       if (data.ok) {
-        await get().fetchAllData();
+        if (data.invoice) {
+          const updated = parseInvoice(data.invoice);
+          set((s) => ({ invoices: s.invoices.map((inv) => inv.id === id ? updated : inv) }));
+        }
+        await get().fetchDashboardStats();
       }
     } catch {}
   },
@@ -909,33 +934,6 @@ if (typeof window !== "undefined") {
     if (state.currentPage) sessionStorage.setItem("sama_current_page", state.currentPage);
   });
 
-  // انتهاء الجلسة بعد 3 دقائق من الخمول
-  let idleTimer: ReturnType<typeof setTimeout> | null = null;
-  const IDLE_TIMEOUT = 3 * 60 * 1000; // 3 دقائق
-
-  const resetIdleTimer = () => {
-    if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => {
-      const state = useAppStore.getState();
-      if (state.isAuthed) {
-        // تسجيل الخروج التلقائي
-        fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
-        sessionStorage.removeItem("sama_current_page");
-        useAppStore.setState({
-          isAuthed: false,
-          currentUser: null,
-          currentPage: "dashboard",
-        });
-      }
-    }, IDLE_TIMEOUT);
-  };
-
-  // إعادة ضبط المؤقت عند أي نشاط
-  const activityEvents = ["mousedown", "keydown", "scroll", "touchstart", "click"];
-  activityEvents.forEach((evt) => {
-    document.addEventListener(evt, resetIdleTimer, { passive: true });
-  });
-
-  // بدء المؤقت عند الدخول
-  resetIdleTimer();
+  // ملاحظة: انتهاء الجلسة بالخمول يُدار في dashboard-layout.tsx (30 دقيقة)
+  // لا حاجة لمؤقت إضافي هنا — يمنع الازدواجية
 }

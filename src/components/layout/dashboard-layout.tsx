@@ -16,10 +16,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-/** مدة الخمول قبل انتهاء الجلسة (3 دقائق) */
-const IDLE_TIMEOUT_MS = 3 * 60 * 1000;
-/** عرض تنبيه قبل الانتهاء بـ 30 ثانية */
-const WARNING_BEFORE_MS = 30 * 1000;
+/** مدة الخمول قبل انتهاء الجلسة (30 دقيقة) — زيادة لتجنب الخروج المفاجئ */
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+/** عرض تنبيه قبل الانتهاء بـ 60 ثانية */
+const WARNING_BEFORE_MS = 60 * 1000;
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const lang = useAppStore((s) => s.lang);
@@ -56,7 +56,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     const events = ["mousemove", "keydown", "click", "scroll", "touchstart", "wheel"];
     events.forEach((e) => window.addEventListener(e, resetActivity, { passive: true }));
 
-    // فحص دوري كل ثانية
+    // فحص دوري كل 10 ثوانٍ (بدلاً من كل ثانية) — تقليل إعادة العرض
     timerRef.current = setInterval(() => {
       const idleMs = Date.now() - lastActivityRef.current;
       const warningThreshold = IDLE_TIMEOUT_MS - WARNING_BEFORE_MS;
@@ -77,7 +77,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           setShowTimeoutWarning(true);
         }
       }
-    }, 1000);
+    }, 10000); // كل 10 ثوانٍ
 
     return () => {
       events.forEach((e) => window.removeEventListener(e, resetActivity));
