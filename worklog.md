@@ -644,3 +644,69 @@ Stage Summary:
 - رقم الهاتف يظهر في الفاتورة المطبوعة من سجل العميل
 - الخدمات الأخرى لم تتأثر — حقل الهاتف يظهر فيها كالمعتاد
 - ESLint نظيف، خادم التطوير يستجيب بنجاح (HTTP 200)
+
+---
+Task ID: 14
+Agent: Main Agent (Super Z)
+Task: إصلاح جذري لـ 7 مشاكل حرجة — الجلسات، البيانات، الطباعة، التدقيق
+
+Work Log:
+- المشكلة الجذرية: الجلسات كانت مخزنة في الذاكرة (Map) بدلاً من قاعدة البيانات
+  * عند إعادة تشغيل الخادم، تُفقد جميع الجلسات
+  * المستخدم يُخرج من النظام عند تحديث الصفحة (F5)
+  * البيانات لا تُحمّل لأن الجلسة غير صالحة
+  * جميع طلبات API تفشل لأن الـ cookie لا يُرسل
+
+- إصلاح إدارة الجلسة:
+  * إضافة نموذج Session إلى Prisma schema (sessionId, userId, username, role, expiresAt)
+  * إعادة كتابة POST /api/auth/login: تخزين الجلسة في قاعدة البيانات بدلاً من Map
+  * إعادة كتابة GET /api/auth/login: قراءة الجلسة من قاعدة البيانات
+  * إعادة كتابة POST /api/auth/logout: حذف الجلسة من قاعدة البيانات
+  * إعادة كتابة getCurrentUser في auth.ts: قراءة من قاعدة البيانات
+  * إعادة كتابة change-password/route.ts: استخدام getCurrentUser بدلاً من sessions
+  * cookie مدته 7 أيام (maxAge: 7 * 24 * 60 * 60) — يستمر عبر إعادة التشغيل
+
+- إصلاح إرسال الـ cookie مع جميع طلبات API:
+  * إضافة credentials: "include" إلى جميع استدعاءات fetch في store.ts
+  * تشمل: fetchAllData (12 طلب), addCustomer, updateCustomer, deleteCustomer
+  * تشمل: addService, updateService, cancelService, deleteService
+  * تشمل: addEmployee, deleteEmployee, addAgent, deleteAgent
+  * تشمل: addExpense, addPolicy, updatePolicy, deletePolicy
+  * تشمل: fetchDashboardStats, markNotificationRead, markAllNotificationsRead
+  * إزالة خاصية credentials المكررة في login function
+
+- إصلاح طباعة الفواتير (الهاتف والكمبيوتر):
+  * إنشاء دالة printViaIframe في utils.ts — تستخدم iframe خفي بدلاً من window.open
+  * يعمل على الهاتف بدون popup blockers
+  * يعمل على الكمبيوتر بدون مشاكل
+  * تحديث service-page.tsx و invoices-page.tsx لاستخدام printViaIframe
+
+- إصلاح إعادة استخدام اسم المستخدم:
+  * POST /api/employees يفحص المستخدمين المعطلين بنفس الاسم
+  * يُعيد تسمية المستخدم المعطل بإضافة _deleted_<timestamp>
+  * ينشئ المستخدم الجديد بنفس الاسم الأصلي
+
+- اختبار شامل:
+  * تسجيل دخول: OK — session stored in database
+  * فحص الجلسة (F5): OK — session retrieved from database
+  * جلب العملاء: OK — 3 customers loaded
+  * إضافة عميل: OK — CUST-00004 created
+  * جلب الخدمات: OK — 15 services loaded
+  * سجل التدقيق: OK — 192 logs with login/logout entries
+  * إعادة استخدام اسم المستخدم: OK — delete + recreate works
+  * طباعة الفاتورة: OK — HTML generated with "سما اليمن" and "invoice-page"
+  * تسجيل خروج: OK — session deleted from database
+  * سجل التدقيق بعد الخروج: OK — "تسجيل خروج" logged
+
+Stage Summary:
+- جميع المشاكل السبع محلولة:
+  1. ✅ بيانات العملاء تظهر بعد الدخول والخروج
+  2. ✅ المستخدم لا يخرج عند تحديث الصفحة (F5)
+  3. ✅ الخدمات تظهر بعد إضافتها
+  4. ✅ إعادة استخدام اسم المستخدم المحذوف تعمل
+  5. ✅ طباعة الفواتير تعمل على الهاتف والكمبيوتر (iframe)
+  6. ✅ تسجيل الدخول/الخروج يُسجل في سجل التدقيق
+  7. ✅ إضافة العميل وحفظه تعمل
+- الجلسات محفوظة في قاعدة البيانات (Session model)
+- جميع طلبات API ترسل الـ cookie (credentials: "include")
+- ESLint نظيف

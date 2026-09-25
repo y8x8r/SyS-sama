@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { tr } from "@/lib/translations";
+import { printViaIframe } from "@/lib/utils";
 import type { Invoice } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -146,15 +147,14 @@ export function InvoicesPage() {
   };
 
   const printInvoice = (i: Invoice) => {
-    // منع طباعة فواتير فارغة أو غير مكتملة
     if (!i || !i.id || !i.invoiceNumber) {
       toast.error(lang === "ar" ? "بيانات الفاتورة غير مكتملة — تعذر إنشاء نسخة الطباعة" : "Invoice data incomplete — cannot generate print view");
       return;
     }
-    // فتح صفحة طباعة الفاتورة في نافذة جديدة — نظيفة بدون أزرار ×/إلغاء/طباعة
-    const url = `/api/print/invoice?id=${i.id}`;
-    window.open(url, "_blank", "width=900,height=700,noopener,noreferrer");
-    toast.success(lang === "ar" ? "تم فتح نسخة الطباعة" : "Print view opened");
+    // طباعة عبر iframe خفي — يعمل على الهاتف والكمبيوتر بدون popup blockers
+    printViaIframe(`/api/print/invoice?id=${i.id}`)
+      .then(() => toast.success(lang === "ar" ? "تم فتح الطباعة" : "Print dialog opened"))
+      .catch(() => toast.error(lang === "ar" ? "فشل الطباعة" : "Print failed"));
   };
 
   

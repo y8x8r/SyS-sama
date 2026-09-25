@@ -422,7 +422,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   changePassword: async (oldPwd, newPwd) => {
     try {
-      const res = await fetch("/api/auth/change-password", {
+      const res = await fetch("/api/auth/change-password", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword: oldPwd, newPassword: newPwd }),
@@ -436,7 +436,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   forgotPassword: async (step, data) => {
     try {
-      const res = await fetch("/api/auth/forgot-password", {
+      const res = await fetch("/api/auth/forgot-password", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ step, ...data }),
@@ -465,18 +465,18 @@ export const useAppStore = create<AppState>()((set, get) => ({
     set({ dataLoading: true });
     try {
       const [customersRes, servicesRes, invoicesRes, paymentsRes, expensesRes, employeesRes, agentsRes, companiesRes, auditRes, notifRes, policiesRes, statsRes] = await Promise.all([
-        fetch("/api/customers"),
-        fetch("/api/services"),
-        fetch("/api/invoices"),
-        fetch("/api/payments"),
-        fetch("/api/expenses"),
-        fetch("/api/employees"),
-        fetch("/api/agents"),
-        fetch("/api/companies"),
-        fetch("/api/audit"),
-        fetch("/api/notifications"),
-        fetch("/api/policies"),
-        fetch("/api/stats"),
+        fetch("/api/customers", { credentials: "include" }),
+        fetch("/api/services", { credentials: "include" }),
+        fetch("/api/invoices", { credentials: "include" }),
+        fetch("/api/payments", { credentials: "include" }),
+        fetch("/api/expenses", { credentials: "include" }),
+        fetch("/api/employees", { credentials: "include" }),
+        fetch("/api/agents", { credentials: "include" }),
+        fetch("/api/companies", { credentials: "include" }),
+        fetch("/api/audit", { credentials: "include" }),
+        fetch("/api/notifications", { credentials: "include" }),
+        fetch("/api/policies", { credentials: "include" }),
+        fetch("/api/stats", { credentials: "include" }),
       ]);
 
       const [customers, services, invoices, payments, expenses, employees, agents, companies, audit, notif, policies, stats] = await Promise.all([
@@ -551,7 +551,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   fetchDashboardStats: async () => {
     try {
-      const res = await fetch("/api/stats");
+      const res = await fetch("/api/stats", { credentials: "include" });
       const data = await res.json();
       if (data.ok) {
         set({ dashboardStats: data.stats });
@@ -560,7 +560,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   markNotificationRead: async (id) => {
-    await fetch("/api/notifications", {
+    await fetch("/api/notifications", { credentials: "include", 
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
@@ -573,7 +573,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   markAllNotificationsRead: async () => {
-    await fetch("/api/notifications", {
+    await fetch("/api/notifications", { credentials: "include", 
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ markAll: true }),
@@ -585,7 +585,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   addCustomer: async (c) => {
     try {
-      const res = await fetch("/api/customers", {
+      const res = await fetch("/api/customers", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(c),
@@ -604,7 +604,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   updateCustomer: async (id, patch) => {
     try {
-      const res = await fetch(`/api/customers/${id}`, {
+      const res = await fetch(`/api/customers/${id}`, { credentials: "include", 
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
@@ -621,7 +621,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   deleteCustomer: async (id) => {
     try {
-      await fetch(`/api/customers/${id}`, { method: "DELETE" });
+      await fetch(`/api/customers/${id}`, { credentials: "include",  method: "DELETE" });
       set((s) => ({
         customers: s.customers.filter((c) => c.id !== id),
       }));
@@ -630,7 +630,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   addEmployee: async (e) => {
     try {
-      const res = await fetch("/api/employees", {
+      const res = await fetch("/api/employees", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(e),
@@ -658,7 +658,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   addAgent: async (a) => {
     try {
-      const res = await fetch("/api/agents", {
+      const res = await fetch("/api/agents", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(a),
@@ -680,7 +680,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   updateAgent: async (id, patch) => {
     try {
-      const res = await fetch(`/api/agents/${id}`, {
+      const res = await fetch(`/api/agents/${id}`, { credentials: "include", 
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
@@ -698,14 +698,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   deleteAgent: async (id) => {
     try {
-      await fetch(`/api/agents/${id}`, { method: "DELETE" });
+      await fetch(`/api/agents/${id}`, { credentials: "include",  method: "DELETE" });
       set((s) => ({ agents: s.agents.filter((a) => a.id !== id) }));
     } catch {}
   },
 
   addTransportCompany: async (c) => {
     try {
-      const res = await fetch("/api/companies", {
+      const res = await fetch("/api/companies", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(c),
@@ -727,7 +727,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   updateTransportCompany: async (id, patch) => {
     try {
-      const res = await fetch(`/api/companies/${id}`, {
+      const res = await fetch(`/api/companies/${id}`, { credentials: "include", 
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
@@ -745,14 +745,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   deleteTransportCompany: async (id) => {
     try {
-      await fetch(`/api/companies/${id}`, { method: "DELETE" });
+      await fetch(`/api/companies/${id}`, { credentials: "include",  method: "DELETE" });
       set((s) => ({ transportCompanies: s.transportCompanies.filter((c) => c.id !== id) }));
     } catch {}
   },
 
   addService: async (s) => {
     try {
-      const res = await fetch("/api/services", {
+      const res = await fetch("/api/services", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(s),
@@ -773,7 +773,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   updateService: async (id, patch) => {
     try {
-      const res = await fetch(`/api/services/${id}`, {
+      const res = await fetch(`/api/services/${id}`, { credentials: "include", 
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
@@ -791,7 +791,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   cancelService: async (id, reason) => {
     try {
-      const res = await fetch(`/api/services/${id}`, {
+      const res = await fetch(`/api/services/${id}`, { credentials: "include", 
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cancelReason: reason }),
@@ -805,7 +805,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   deleteService: async (id) => {
     try {
-      const res = await fetch(`/api/services/${id}?hardDelete=true`, {
+      const res = await fetch(`/api/services/${id}?hardDelete=true`, { credentials: "include", 
         method: "DELETE",
       });
       const data = await res.json();
@@ -817,7 +817,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   updateInvoice: async (id, patch) => {
     try {
-      const res = await fetch(`/api/invoices/${id}`, {
+      const res = await fetch(`/api/invoices/${id}`, { credentials: "include", 
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
@@ -831,14 +831,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   deleteInvoice: async (id) => {
     try {
-      await fetch(`/api/invoices/${id}`, { method: "DELETE" });
+      await fetch(`/api/invoices/${id}`, { credentials: "include",  method: "DELETE" });
       set((s) => ({ invoices: s.invoices.filter((i) => i.id !== id) }));
     } catch {}
   },
 
   addExpense: async (e) => {
     try {
-      const res = await fetch("/api/expenses", {
+      const res = await fetch("/api/expenses", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(e),
@@ -854,7 +854,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   addPolicy: async (p) => {
     try {
-      const res = await fetch("/api/policies", {
+      const res = await fetch("/api/policies", { credentials: "include", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(p),
@@ -868,7 +868,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   updatePolicy: async (id, patch) => {
     try {
-      const res = await fetch(`/api/policies/${id}`, {
+      const res = await fetch(`/api/policies/${id}`, { credentials: "include", 
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
@@ -884,7 +884,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   deletePolicy: async (id) => {
     try {
-      await fetch(`/api/policies/${id}`, { method: "DELETE" });
+      await fetch(`/api/policies/${id}`, { credentials: "include",  method: "DELETE" });
       set((s) => ({ policies: s.policies.filter((p) => p.id !== id) }));
     } catch {}
   },

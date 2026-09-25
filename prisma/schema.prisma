@@ -31,8 +31,26 @@ model User {
   employee    Employee? @relation("UserEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
   permissions UserPermission[]
   auditLogs   AuditLog[]
+  sessions    Session[]
 
   @@index([role])
+}
+
+// ==================== الجلسات (تُخزَّن في قاعدة البيانات للثبات) ====================
+
+model Session {
+  id        String   @id @default(cuid())
+  sessionId String   @unique // المعرف العشوائي المُخزَّن في cookie
+  userId    String
+  username  String
+  role      String
+  expiresAt DateTime // تاريخ انتهاء الجلسة
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 model UserPermission {
   id        String @id @default(cuid())

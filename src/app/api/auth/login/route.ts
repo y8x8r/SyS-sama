@@ -2,13 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import crypto from "crypto";
 
-// جلسات بسيطة في الذاكرة — في الإنتاج يُستخدم JWT أو جلسات قاعدة بيانات
-// استخدام globalThis لضمان بقاء الجلسات عبر hot reloads
-const globalForSessions = globalThis as unknown as {
-  samaSessions: Map<string, { userId: string; username: string; role: string }> | undefined;
-};
-export const sessions = globalForSessions.samaSessions ?? new Map<string, { userId: string; username: string; role: string }>();
-if (process.env.NODE_ENV !== "production") globalForSessions.samaSessions = sessions;
+// مدة صلاحية الجلسة: 7 أيام
+const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,12 +42,18 @@ export async function POST(req: NextRequest) {
       where: { userId: user.id },
     });
 
-    // إنشاء جلسة
+    // إنشاء جلسة في قاعدة البيانات (بدلاً من الذاكرة)
     const sessionId = crypto.randomBytes(32).toString("hex");
-    sessions.set(sessionId, {
-      userId: user.id,
-      username: user.username,
-      role: user.role,
+    const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
+
+    await db.session.create({
+      data: {
+        sessionId,
+        userId: user.id,
+        username: user.username,
+        role: user.role,
+        expiresAt,
+      },
     });
 
     // تسجيل في سجل التدقيق
@@ -88,14 +89,12 @@ export async function POST(req: NextRequest) {
       })),
     });
 
-    // تعيين cookie للجلسة (httpOnly للأمان)
-    // session cookie — ينتهي تلقائياً عند إغلاق المتصفح بالكامل
-    // لا يستمر عبر إعادة تشغيل المتصفح، يطلب تسجيل الدخول مرة أخرى
+    // تعيين cookie للجلسة — يستمر 7 أيام عبر إعادة التشغيل والتحديث
     response.cookies.set("sama_session", sessionId, {
       httpOnly: true,
       sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60, // 7 أيام بالثواني
       path: "/",
-      // بدون maxAge = session cookie ينتهي عند إغلاق المتصفح
     });
 
     return response;
@@ -108,14 +107,26 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/** الحصول على معلومات الجلسة الحالية */
+/** الحصول على معلومات الجلسة الحالية من قاعدة البيانات */
 export async function GET(req: NextRequest) {
   const sessionId = req.cookies.get("sama_session")?.value;
   if (!sessionId) {
     return NextResponse.json({ ok: false, user: null });
   }
-  const session = sessions.get(sessionId);
+
+  // البحث عن الجلسة في قاعدة البيانات
+  const session = await db.session.findUnique({
+    where: { sessionId },
+  });
+
   if (!session) {
+    return NextResponse.json({ ok: false, user: null });
+  }
+
+  // التحقق من عدم انتهاء صلاحية الجلسة
+  if (session.expiresAt < new Date()) {
+    // الجلسة منتهية — حذفها
+    await db.session.delete({ where: { id: session.id } }).catch(() => {});
     return NextResponse.json({ ok: false, user: null });
   }
 
@@ -124,7 +135,8 @@ export async function GET(req: NextRequest) {
     include: { permissions: true },
   });
   if (!user || !user.isActive) {
-    sessions.delete(sessionId);
+    // المستخدم غير نشط — حذف الجلسة
+    await db.session.delete({ where: { id: session.id } }).catch(() => {});
     return NextResponse.json({ ok: false, user: null });
   }
 
@@ -147,6 +159,3 @@ export async function GET(req: NextRequest) {
     })),
   });
 }
-
-export { sessions };
-

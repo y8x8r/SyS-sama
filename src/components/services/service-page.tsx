@@ -54,7 +54,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, printViaIframe } from "@/lib/utils";
 import {
   Plus,
   Printer,
@@ -344,12 +344,12 @@ export function ServicePage({ config }: Props) {
   };
 
   const printRecord = (record: (typeof services)[0]) => {
-    // فتح صفحة طباعة مستقلة بدلاً من window.print() على لوحة التحكم
-    // البحث عن الفاتورة المرتبطة بالخدمة
+    // طباعة عبر iframe خفي — يعمل على الهاتف والكمبيوتر بدون popup blockers
     const invoice = invoices.find((inv) => inv.serviceId === record.id);
     if (invoice) {
-      window.open(`/api/print/invoice?id=${invoice.id}`, "_blank", "width=900,height=700");
-      toast.success(lang === "ar" ? "تم فتح نسخة الطباعة" : "Print view opened");
+      printViaIframe(`/api/print/invoice?id=${invoice.id}`)
+        .then(() => toast.success(lang === "ar" ? "تم فتح الطباعة" : "Print dialog opened"))
+        .catch(() => toast.error(lang === "ar" ? "فشل الطباعة" : "Print failed"));
     } else {
       toast.error(lang === "ar" ? "لا توجد فاتورة مرتبطة بهذه المعاملة" : "No invoice linked to this transaction");
     }

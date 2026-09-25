@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "./db";
-import { sessions } from "../app/api/auth/login/route";
 
 export interface SessionUser {
   userId: string;
@@ -8,12 +7,23 @@ export interface SessionUser {
   role: string;
 }
 
-/** الحصول على المستخدم الحالي من الجلسة */
+/** الحصول على المستخدم الحالي من الجلسة المخزَّنة في قاعدة البيانات */
 export async function getCurrentUser(req: NextRequest): Promise<SessionUser | null> {
   const sessionId = req.cookies.get("sama_session")?.value;
   if (!sessionId) return null;
-  const session = sessions.get(sessionId);
+
+  // البحث عن الجلسة في قاعدة البيانات
+  const session = await db.session.findUnique({
+    where: { sessionId },
+  });
+
   if (!session) return null;
+
+  // التحقق من عدم انتهاء صلاحية الجلسة
+  if (session.expiresAt < new Date()) {
+    await db.session.delete({ where: { id: session.id } }).catch(() => {});
+    return null;
+  }
 
   // التحقق من أن المستخدم لا يزال نشطاً
   const user = await db.user.findUnique({
@@ -21,7 +31,7 @@ export async function getCurrentUser(req: NextRequest): Promise<SessionUser | nu
     select: { id: true, username: true, role: true, isActive: true },
   });
   if (!user || !user.isActive) {
-    sessions.delete(sessionId);
+    await db.session.delete({ where: { id: session.id } }).catch(() => {});
     return null;
   }
 
