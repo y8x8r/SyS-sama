@@ -630,22 +630,23 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   addEmployee: async (e) => {
     try {
-      const res = await fetch("/api/employees", { credentials: "include", 
+      const res = await fetch("/api/employees", { credentials: "include",
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(e),
       });
       const data = await res.json();
       if (data.ok) {
-        // إعادة جلب الموظفين فقط (2 طلب بدلاً من 12)
-        const empRes = await fetch("/api/employees", { credentials: "include" });
-        const empData = await empRes.json();
-        if (empData.ok) {
-          set({ employees: empData.employees, users: empData.users });
+        // تحديث محلي مباشر بدلاً من إعادة جلب القائمة كاملة (توفير طلب API)
+        if (data.employee) {
+          set((st) => ({ employees: [data.employee, ...st.employees] }));
+        }
+        if (data.user) {
+          set((st) => ({ users: [data.user, ...st.users] }));
         }
         return { ok: true };
       }
-      return { ok: false, error: data.error };
+      return { ok: false, error: data.error ?? "create_failed", message: data.message };
     } catch (err) {
       return { ok: false, error: "server_error" };
     }

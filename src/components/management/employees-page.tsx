@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useAppStore } from "@/lib/store";
 import { tr } from "@/lib/translations";
 import type { Role } from "@/lib/types";
@@ -84,6 +84,8 @@ export function EmployeesPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
+  // منع الإرسال المزدوج عند النقر المتكرر على زر الإنشاء
+  const submittingRef = useRef(false);
 
   const isManager = currentUser?.role === "manager";
 
@@ -108,26 +110,57 @@ export function EmployeesPage() {
   };
 
   const submit = async () => {
+    // منع الإرسال المزدوج — إذا كان هناك طلب قيد التنفيذ، تجاهل
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     const errs: Record<string, string> = {};
-    if (!form.fullName.trim()) errs.fullName = lang === "ar" ? "مطلوب" : "Required";
-    if (!form.username.trim()) errs.username = lang === "ar" ? "مطلوب" : "Required";
+    const trimmedName = form.fullName.trim();
+    const trimmedUsername = form.username.trim();
+
+    if (!trimmedName) errs.fullName = lang === "ar" ? "مطلوب" : "Required";
+    if (!trimmedUsername) errs.username = lang === "ar" ? "مطلوب" : "Required";
+    if (trimmedUsername.includes(" ")) errs.username = lang === "ar" ? "اسم المستخدم لا يجب أن يحتوي على مسافات" : "Username must not contain spaces";
     if (form.password.length < 4) errs.password = tr(lang, "err_password_short");
     setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-
-    setSaving(true);
-    const result = await addEmployee(form);
-    setSaving(false);
-    if (!result.ok) {
-      const errKey = result.error ?? "server_error";
-      const msg = errKey === "username_exists" ? tr(lang, "err_username_exists") : errKey;
-      setErrors({ username: msg });
-      toast.error(msg);
+    if (Object.keys(errs).length > 0) {
+      submittingRef.current = false;
       return;
     }
-    toast.success(lang === "ar" ? "تم إنشاء حساب الموظف فوراً" : "Employee account created immediately");
-    setOpen(false);
-    setForm({ fullName: "", username: "", role: "booking_officer", password: "" });
+
+    setSaving(true);
+    try {
+      const result = await addEmployee({
+        fullName: trimmedName,
+        username: trimmedUsername,
+        role: form.role,
+        password: form.password,
+      });
+      if (!result.ok) {
+        const errKey = result.error ?? "server_error";
+        let msg: string;
+        if (errKey === "username_exists") msg = lang === "ar" ? "اسم المستخدم مستخدم حالياً من حساب نشط" : "Username already in use";
+        else if (errKey === "username_no_spaces") msg = lang === "ar" ? "اسم المستخدم لا يجب أن يحتوي على مسافات" : "Username must not contain spaces";
+        else if (errKey === "missing_fields_or_short_password") msg = lang === "ar" ? "بيانات ناقصة أو كلمة مرور قصيرة" : "Missing fields or short password";
+        else if (errKey === "not_authed") msg = lang === "ar" ? "يجب تسجيل الدخول أولاً" : "Not authenticated";
+        else if (errKey === "only_manager_can_manage") msg = lang === "ar" ? "هذا الإجراء متاح للمدير العام فقط" : "Only manager can do this";
+        else msg = lang === "ar" ? "فشل إنشاء الحساب" : "Failed to create account";
+        setErrors({ username: msg });
+        toast.error(msg);
+        submittingRef.current = false;
+        return;
+      }
+      // النجاح فقط بعد تأكيد الحفظ فعلياً
+      toast.success(lang === "ar" ? "تم إنشاء حساب الموظف بنجاح" : "Employee account created successfully");
+      setOpen(false);
+      setForm({ fullName: "", username: "", role: "booking_officer", password: "" });
+      setErrors({});
+    } catch (err) {
+      toast.error(lang === "ar" ? "حدث خطأ غير متوقع" : "Unexpected error");
+    } finally {
+      setSaving(false);
+      submittingRef.current = false;
+    }
   };
 
   const confirmDelete = async () => {
