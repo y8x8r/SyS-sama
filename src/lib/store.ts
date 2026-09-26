@@ -239,7 +239,7 @@ interface AppState {
   updateCustomer: (id: string, c: Partial<Customer>) => Promise<void>;
   deleteCustomer: (id: string) => Promise<void>;
   // Actions — Employees
-  addEmployee: (e: { fullName: string; username: string; role: User["role"]; password: string }) => Promise<{ ok: boolean; error?: string }>;
+  addEmployee: (e: { fullName: string; username: string; role: User["role"]; password: string }) => Promise<{ ok: boolean; error?: string; message?: string }>;
   deleteEmployee: (id: string) => Promise<void>;
   // Actions — Agents & Companies
   addAgent: (a: Omit<Agent, "id" | "createdAt" | "isActive">) => Promise<void>;

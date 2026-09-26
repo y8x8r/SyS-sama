@@ -139,12 +139,14 @@ export function EmployeesPage() {
       if (!result.ok) {
         const errKey = result.error ?? "server_error";
         let msg: string;
-        if (errKey === "username_exists") msg = lang === "ar" ? "اسم المستخدم مستخدم حالياً من حساب نشط" : "Username already in use";
+        if (errKey === "username_exists") msg = result.message ?? (lang === "ar" ? "اسم المستخدم مستخدم حالياً من حساب نشط" : "Username already in use");
         else if (errKey === "username_no_spaces") msg = lang === "ar" ? "اسم المستخدم لا يجب أن يحتوي على مسافات" : "Username must not contain spaces";
-        else if (errKey === "missing_fields_or_short_password") msg = lang === "ar" ? "بيانات ناقصة أو كلمة مرور قصيرة" : "Missing fields or short password";
+        else if (errKey === "missing_fields_or_short_password") msg = lang === "ar" ? "بيانات ناقصة أو كلمة مرور قصيرة (4 أحرف على الأقل)" : "Missing fields or short password (min 4 chars)";
         else if (errKey === "not_authed") msg = lang === "ar" ? "يجب تسجيل الدخول أولاً" : "Not authenticated";
         else if (errKey === "only_manager_can_manage") msg = lang === "ar" ? "هذا الإجراء متاح للمدير العام فقط" : "Only manager can do this";
-        else msg = lang === "ar" ? "فشل إنشاء الحساب" : "Failed to create account";
+        else if (errKey === "employee_number_conflict") msg = lang === "ar" ? "تعارض في رقم الموظف — حاول مرة أخرى" : "Employee number conflict — try again";
+        else if (errKey === "create_failed") msg = result.message ?? (lang === "ar" ? "فشل إنشاء الحساب — تحقق من البيانات" : "Failed to create account");
+        else msg = result.message ?? (lang === "ar" ? "فشل إنشاء الحساب" : "Failed to create account");
         setErrors({ username: msg });
         toast.error(msg);
         submittingRef.current = false;
