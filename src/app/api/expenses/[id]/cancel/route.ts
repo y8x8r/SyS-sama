@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       orderBy: { createdAt: "desc" },
     });
 
-    let reversalResult = null;
+    let reversalResult: { txNumber: string; newBalance: number } | null = null;
     if (originalTx) {
       // 3. عكس الحركة (إرجاع المبلغ للصندوق)
       reversalResult = await reverseTransaction({

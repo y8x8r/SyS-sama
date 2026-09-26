@@ -14,7 +14,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const body = await req.json();
 
-  const existing = await db.serviceRecord.findUnique({ where: { id } });
+  const existing = await db.serviceRecord.findUnique({ where: { id }, include: { invoice: true } });
   if (!existing) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
@@ -157,7 +157,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const url = new URL(req.url);
   const hardDelete = url.searchParams.get("hardDelete") === "true";
 
-  const existing = await db.serviceRecord.findUnique({ where: { id } });
+  const existing = await db.serviceRecord.findUnique({ where: { id }, include: { invoice: true } });
   if (!existing) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
