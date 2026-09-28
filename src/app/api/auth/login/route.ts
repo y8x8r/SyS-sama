@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 
 // مدة صلاحية الجلسة: 7 أيام
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -23,8 +24,18 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // التحقق من كلمة المرور (في الإنتاج: Argon2 verify)
-    if (!user || user.passwordHash !== password || password.length < 3) {
+    // التحقق من وجود المستخدم
+    if (!user) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_credentials" },
+        { status: 401 }
+      );
+    }
+
+    // التحقق من كلمة المرور المشفرة
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    
+    if (!isPasswordValid) {
       return NextResponse.json(
         { ok: false, error: "invalid_credentials" },
         { status: 401 }
