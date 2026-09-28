@@ -8,34 +8,41 @@
  * أسئلة الاستعادة (للمدير العام فقط، تُخزَّن مجزّأة):
  * - متى تم افتتاح مكتب سما اليمن؟ → 2024
  * - ما هو إيميلك الشخصي؟ → ahmed778495152@gmail.com
- *
- * لا تظهر هذه الإجابات في الواجهة أو النصوص المساعدة أو سجلات التدقيق أو الشيفرة الأمامية.
  */
 
 import { db } from "../src/lib/db";
 import * as crypto from "crypto";
+import bcrypt from "bcryptjs"; // تمت إضافة مكتبة التشفير
 
-// تجزئة بسيطة للأغراض التجريبية — في الإنتاج يُستخدم Argon2 أو bcrypt
+// تجزئة بسيطة للأغراض التجريبية (لأسئلة الاستعادة)
 function simpleHash(input: string): string {
   return crypto.createHash("sha256").update(input.trim().toLowerCase()).digest("hex");
 }
 
 async function main() {
-  // التحقق من عدم وجود حساب المدير مسبقاً
+  // تشفير كلمة المرور بشكل متوافق مع نظام تسجيل الدخول
+  const hashedPassword = await bcrypt.hash("sama1", 10);
+
+  // التحقق من وجود حساب المدير مسبقاً
   const existing = await db.user.findFirst({
     where: { username: "user1" },
   });
 
   if (existing) {
-    console.log("✓ حساب المدير العام موجود مسبقاً — تم تخطي التهيئة.");
+    // إذا كان موجوداً (كما في حالتك الآن)، نقوم بتحديث كلمة المرور فقط لتكون مشفرة
+    await db.user.update({
+      where: { id: existing.id },
+      data: { passwordHash: hashedPassword },
+    });
+    console.log("✓ حساب المدير العام موجود مسبقاً — تم تحديث كلمة المرور لتكون مشفرة بشكل صحيح.");
     return;
   }
 
-  // إنشاء حساب المدير العام فقط (لا حسابات تجريبية أخرى)
+  // إنشاء حساب المدير العام إذا لم يكن موجوداً
   const manager = await db.user.create({
     data: {
       username: "user1",
-      passwordHash: "sama1", // في الإنتاج: Argon2 hash
+      passwordHash: hashedPassword, // تم استخدام الكلمة المشفرة هنا
       role: "manager",
       isActive: true,
       mustChangePassword: false,
