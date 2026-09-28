@@ -60,6 +60,11 @@ export function CustomersPage() {
   const addCustomer = useAppStore((s) => s.addCustomer);
   const updateCustomer = useAppStore((s) => s.updateCustomer);
   const deleteCustomer = useAppStore((s) => s.deleteCustomer);
+  
+  // دوال ومتغيرات التقسيم (Pagination)
+  const hasMore = useAppStore((s) => s.customersHasMore);
+  const isLoadingMore = useAppStore((s) => s.customersLoadingMore);
+  const fetchMoreCustomers = useAppStore((s) => s.fetchMoreCustomers);
 
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -175,7 +180,6 @@ export function CustomersPage() {
     toast.success(lang === "ar" ? "تم فتح تقرير PDF" : "PDF report opened");
   };
 
-  
   const exportCustomExcel = (type: string) => {
     if (!customFromDate || !customToDate) {
       toast.error(lang === "ar" ? "يرجى تحديد التاريخ من وإلى" : "Please select from and to dates");
@@ -203,7 +207,7 @@ export function CustomersPage() {
     toast.success(lang === "ar" ? "تم فتح تقرير PDF" : "PDF report opened");
   };
 
-const handleDialogChange = (open: boolean) => {
+  const handleDialogChange = (open: boolean) => {
     if (!open && formDirty) {
       if (!window.confirm(lang === "ar" ? "لديك تغييرات غير محفوظة. هل تريد المغادرة؟" : "You have unsaved changes. Leave anyway?")) {
         return;
@@ -223,7 +227,7 @@ const handleDialogChange = (open: boolean) => {
         <div>
           <h1 className="text-2xl font-bold text-foreground">{tr(lang, "nav_customers")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {lang === "ar" ? `إجمالي العملاء: ${customers.length}` : `Total customers: ${customers.length}`}
+            {lang === "ar" ? `إجمالي العملاء المعروضين: ${customers.length}` : `Displayed customers: ${customers.length}`}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -378,10 +382,34 @@ const handleDialogChange = (open: boolean) => {
               </TableBody>
             </Table>
           </div>
+          
+          {/* زر تحميل المزيد يظهر فقط إذا لم نكن نبحث وفي حال وجود بيانات إضافية */}
+          {!search.trim() && hasMore && (
+            <div className="flex justify-center p-6 border-t border-border bg-muted/10">
+              <Button
+                variant="outline"
+                onClick={fetchMoreCustomers}
+                disabled={isLoadingMore}
+                className="w-full sm:w-auto bg-background hover:bg-muted min-w-[200px]"
+              >
+                {isLoadingMore ? (
+                  <>
+                    <Loader2 className="w-4 h-4 me-2 animate-spin text-primary" />
+                    {lang === "ar" ? "جاري تحميل العملاء بسرعة..." : "Loading customers..."}
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-4 h-4 me-2 text-primary" />
+                    {lang === "ar" ? "تحميل 100 عميل آخر" : "Load 100 more"}
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Create/Edit dialog — بدون حقل رقم الهوية */}
+      {/* Create/Edit dialog */}
       <Dialog open={open} onOpenChange={handleDialogChange}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
@@ -439,7 +467,7 @@ const handleDialogChange = (open: boolean) => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* تصدير حسب التاريخ — نافذة منبثقة */}
+      {/* تصدير حسب التاريخ */}
       <Dialog open={customDateOpen} onOpenChange={setCustomDateOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -470,7 +498,6 @@ const handleDialogChange = (open: boolean) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }

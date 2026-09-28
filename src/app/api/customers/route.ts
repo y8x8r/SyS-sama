@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, logAudit, genNumber, nextSeq, checkModuleAccess } from "@/lib/auth";
 
-/** GET /api/customers — قائمة العملاء مع بحث */
+/** GET /api/customers — قائمة العملاء مع بحث وتقسيم (Pagination) */
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ ok: false, error: "not_authed" }, { status: 401 });
@@ -11,23 +11,40 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? "";
+  
+  // إعدادات التقسيم (Pagination)
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const limit = parseInt(searchParams.get("limit") || "100", 10);
+  const skip = (page - 1) * limit;
 
+  // توحيد شرط البحث لاستخدامه في جلب البيانات والعد
+  const whereCondition = q
+    ? {
+        OR: [
+          { fullName: { contains: q } },
+          { customerNumber: { contains: q } },
+          { phoneNumber: { contains: q } },
+          { passportNumber: { contains: q } },
+        ],
+      }
+    : undefined;
+
+  // جلب العملاء مع تطبيق التقسيم (take & skip)
   const customers = await db.customer.findMany({
-    where: q
-      ? {
-          OR: [
-            { fullName: { contains: q } },
-            { customerNumber: { contains: q } },
-            { phoneNumber: { contains: q } },
-            { passportNumber: { contains: q } },
-          ],
-        }
-      : undefined,
+    where: whereCondition,
+    take: limit,
+    skip: skip,
     orderBy: { createdAt: "desc" },
   });
 
+  // حساب إجمالي العملاء (المطابقين للبحث) لمعرفة هل يوجد دفعات متبقية
+  const totalCount = await db.customer.count({ where: whereCondition });
+  const hasMore = skip + customers.length < totalCount;
+
   return NextResponse.json({
     ok: true,
+    hasMore,
+    totalCount,
     customers: customers.map((c) => ({
       id: c.id,
       customerNumber: c.customerNumber,

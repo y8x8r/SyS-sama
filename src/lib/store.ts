@@ -195,6 +195,11 @@ interface AppState {
   expandedSections: Record<string, boolean>;
   // Data
   customers: Customer[];
+  // Pagination for customers
+  customersHasMore: boolean;
+  customersPage: number;
+  customersLoadingMore: boolean;
+  
   employees: Employee[];
   users: User[];
   userPermissions: UserPermission[];
@@ -232,6 +237,7 @@ interface AppState {
   // Actions — Data loading
   fetchAllData: () => Promise<void>;
   fetchDashboardStats: () => Promise<void>;
+  fetchMoreCustomers: () => Promise<void>;
   // Actions — Notifications
   markNotificationRead: (id: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
@@ -277,6 +283,9 @@ export const useAppStore = create<AppState>()(
       expandedSections: { services: false, management: false, finance: false, monitoring: false, settings: false },
       mobileSidebarOpen: false,
       customers: [],
+      customersHasMore: true,
+      customersPage: 1,
+      customersLoadingMore: false,
       employees: [],
       users: [],
       userPermissions: [],
@@ -341,6 +350,8 @@ export const useAppStore = create<AppState>()(
           currentUser: null,
           currentPage: "dashboard",
           customers: [],
+          customersHasMore: true,
+          customersPage: 1,
           services: [],
           invoices: [],
           payments: [],
@@ -461,7 +472,7 @@ export const useAppStore = create<AppState>()(
             customersRes, servicesRes, invoicesRes, paymentsRes, expensesRes,
             employeesRes, agentsRes, companiesRes, auditRes, notifRes, policiesRes, statsRes
           ] = await Promise.all([
-            fetch("/api/customers", { credentials: "include" }),
+            fetch("/api/customers?page=1&limit=100", { credentials: "include" }), // جلب أول 100 عميل فقط
             fetch("/api/services", { credentials: "include" }),
             fetch("/api/invoices", { credentials: "include" }),
             fetch("/api/payments", { credentials: "include" }),
@@ -518,6 +529,8 @@ export const useAppStore = create<AppState>()(
 
           set({
             customers: (customers.customers || []).map(parseCustomer),
+            customersHasMore: customers.hasMore ?? false,
+            customersPage: 1,
             services: (services.services || []).map(parseService),
             invoices: (invoices.invoices || []).map(parseInvoice),
             payments: (payments.payments || []).map(parsePayment),
@@ -536,6 +549,33 @@ export const useAppStore = create<AppState>()(
         } catch (e) {
           console.error("Fetch all data error:", e);
           set({ dataLoading: false });
+        }
+      },
+
+      fetchMoreCustomers: async () => {
+        const state = get();
+        if (!state.customersHasMore || state.customersLoadingMore) return;
+
+        set({ customersLoadingMore: true });
+        try {
+          const nextPage = state.customersPage + 1;
+          const res = await fetch(`/api/customers?page=${nextPage}&limit=100`, { credentials: "include" });
+          const data = await res.json();
+
+          if (data.ok) {
+            const newCustomers = (data.customers || []).map(parseCustomer);
+            set({
+              customers: [...state.customers, ...newCustomers],
+              customersPage: nextPage,
+              customersHasMore: data.hasMore,
+              customersLoadingMore: false,
+            });
+          } else {
+            set({ customersLoadingMore: false });
+          }
+        } catch (e) {
+          console.error("Fetch more customers error:", e);
+          set({ customersLoadingMore: false });
         }
       },
 
@@ -915,9 +955,8 @@ export const useAppStore = create<AppState>()(
       },
     }),
     {
-      name: "sama-system-storage", // اسم مفتاح الحفظ في المتصفح
+      name: "sama-system-storage", 
       partialize: (state) => ({
-        // حفظ هذه البيانات الأساسية فقط لضمان بقاء الجلسة مفتوحة بعد التحديث
         isAuthed: state.isAuthed,
         currentUser: state.currentUser,
         lang: state.lang,
