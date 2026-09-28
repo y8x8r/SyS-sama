@@ -60,6 +60,7 @@ export function CustomersPage() {
   const addCustomer = useAppStore((s) => s.addCustomer);
   const updateCustomer = useAppStore((s) => s.updateCustomer);
   const deleteCustomer = useAppStore((s) => s.deleteCustomer);
+  const dataLoading = useAppStore((s) => s.dataLoading);
   
   // دوال ومتغيرات التقسيم (Pagination)
   const hasMore = useAppStore((s) => s.customersHasMore);
@@ -327,7 +328,18 @@ export function CustomersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.length === 0 ? (
+                {dataLoading && list.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-16">
+                      <div className="flex flex-col items-center gap-3 text-indigo-600">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p className="text-sm font-medium animate-pulse">
+                          {lang === "ar" ? "جاري تحميل العملاء بسرعة..." : "Loading customers..."}
+                        </p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : list.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-12">
                       <div className="flex flex-col items-center gap-3 text-muted-foreground">
@@ -383,8 +395,8 @@ export function CustomersPage() {
             </Table>
           </div>
           
-          {/* زر تحميل المزيد يظهر فقط إذا لم نكن نبحث وفي حال وجود بيانات إضافية */}
-          {!search.trim() && hasMore && (
+          {/* زر تحميل المزيد يظهر فقط إذا لم نكن نبحث وفي حال وجود بيانات إضافية وتم جلب الدفعة الأولى */}
+          {!search.trim() && hasMore && list.length > 0 && (
             <div className="flex justify-center p-6 border-t border-border bg-muted/10">
               <Button
                 variant="outline"
