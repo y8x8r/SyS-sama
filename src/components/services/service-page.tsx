@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { tr } from "@/lib/translations";
 import type {
@@ -111,7 +111,7 @@ interface Props {
 
 export function ServicePage({ config }: Props) {
   const lang = useAppStore((s) => s.lang);
-  const services = useAppStore((s) => s.services);
+  const storeServices = useAppStore((s) => s.services);
   const customers = useAppStore((s) => s.customers);
   const invoices = useAppStore((s) => s.invoices);
   const currentUser = useAppStore((s) => s.currentUser);
@@ -120,12 +120,50 @@ export function ServicePage({ config }: Props) {
   const cancelService = useAppStore((s) => s.cancelService);
   const deleteService = useAppStore((s) => s.deleteService);
   const setPage = useAppStore((s) => s.setPage);
+  const dataLoading = useAppStore((s) => s.dataLoading);
+
+  // كاش محلي فوري لمنع الانتظار عند فتح الصفحة أو التحديث
+  const [cachedServices, setCachedServices] = useState<any[]>([]);
+
+  // تحميل الكاش بأمان عند أول تحميل للمتصفح
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = window.localStorage.getItem("sys_sama_services_cache");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCachedServices(parsed);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
+  // تحديث الكاش تلقائياً عندما تصل البيانات الطازجة من السيرفر
+  useEffect(() => {
+    if (storeServices && storeServices.length > 0) {
+      setCachedServices(storeServices);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem("sys_sama_services_cache", JSON.stringify(storeServices));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+  }, [storeServices]);
+
+  // البيانات الفعالة: الحية إن وُجدت، أو الكاش اللحظي
+  const effectiveServices = storeServices.length > 0 ? storeServices : cachedServices;
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [viewRecord, setViewRecord] = useState<null | (typeof services)[0]>(null);
+  const [viewRecord, setViewRecord] = useState<null | (typeof storeServices)[0]>(null);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -139,13 +177,13 @@ export function ServicePage({ config }: Props) {
   const [customToDate, setCustomToDate] = useState("");
 
   const list = useMemo(() => {
-    let l = services.filter((s) => s.serviceType === config.serviceType);
+    let l = effectiveServices.filter((s) => s.serviceType === config.serviceType);
     if (search.trim()) {
       const q = search.toLowerCase();
       l = l.filter(
         (s) =>
-          s.customerName.toLowerCase().includes(q) ||
-          s.serviceNumber.toLowerCase().includes(q) ||
+          (s.customerName ?? "").toLowerCase().includes(q) ||
+          (s.serviceNumber ?? "").toLowerCase().includes(q) ||
           (s.details && JSON.stringify(s.details).toLowerCase().includes(q))
       );
     }
@@ -153,16 +191,13 @@ export function ServicePage({ config }: Props) {
       l = l.filter((s) => s.status === statusFilter);
     }
     return l;
-  }, [services, config.serviceType, search, statusFilter]);
+  }, [effectiveServices, config.serviceType, search, statusFilter]);
 
-  // إلغاء تكرار العملاء حسب رقم الهاتف — يظهر العميل مرة واحدة فقط في القائمة المنسدلة
-  // يُطبق على خدمات: الفحص المهني، تفويض الفيز، تأشيرة العبور (التي تربط رقم الهاتف بالعميل)
   const dedupedCustomers = useMemo(() => {
     const dedupServices = ["professional_exam", "visa_authorization", "transit_visa"];
     if (!dedupServices.includes(config.serviceType)) return customers;
     const seen = new Set<string>();
     return customers.filter((c) => {
-      // العملاء بدون رقم هاتف يظهرون جميعاً (لا تكرار للقيم الفارغة)
       if (!c.phoneNumber || c.phoneNumber.trim() === "") return true;
       if (seen.has(c.phoneNumber)) return false;
       seen.add(c.phoneNumber);
@@ -187,14 +222,14 @@ export function ServicePage({ config }: Props) {
     setOpen(true);
   };
 
-  const openEdit = (record: (typeof services)[0]) => {
+  const openEdit = (record: (typeof storeServices)[0]) => {
     const newForm: Record<string, string> = {
       customerId: record.customerId,
       customerName: record.customerName,
       customerNumber: customers.find((c) => c.id === record.customerId)?.customerNumber ?? "",
       phoneNumber: customers.find((c) => c.id === record.customerId)?.phoneNumber ?? "",
-      passportNumber: record.details.passportNumber as string ?? customers.find((c) => c.id === record.customerId)?.passportNumber ?? "",
-      cardNumber: record.details.cardNumber as string ?? customers.find((c) => c.id === record.customerId)?.cardNumber ?? "",
+      passportNumber: (record.details?.passportNumber as string) ?? customers.find((c) => c.id === record.customerId)?.passportNumber ?? "",
+      cardNumber: (record.details?.cardNumber as string) ?? customers.find((c) => c.id === record.customerId)?.cardNumber ?? "",
       nationalId: customers.find((c) => c.id === record.customerId)?.nationalId ?? "",
       price: String(record.price),
       paid: String(record.paid),
@@ -206,7 +241,7 @@ export function ServicePage({ config }: Props) {
     };
     for (const f of config.fields) {
       if (["customerId", "customerName", "customerNumber", "phoneNumber", "passportNumber", "cardNumber", "nationalId", "price", "paid", "currency", "paymentMethod", "transferNo", "status", "notes"].includes(f.name)) continue;
-      if (record.details[f.name] !== undefined) newForm[f.name] = String(record.details[f.name]);
+      if (record.details?.[f.name] !== undefined) newForm[f.name] = String(record.details[f.name]);
     }
     setForm(newForm);
     setEditingId(record.id);
@@ -222,12 +257,9 @@ export function ServicePage({ config }: Props) {
     next.customerName = c.fullName;
     next.customerNumber = c.customerNumber;
     next.phoneNumber = c.phoneNumber;
-    // اعتماد رقم الجواز تلقائياً من ملف العميل عند توفره
     if (c.passportNumber) next.passportNumber = c.passportNumber;
-    // اعتماد رقم البطاقة تلقائياً من ملف العميل عند توفره
     if (c.cardNumber) next.cardNumber = c.cardNumber;
     if (c.nationalId) next.nationalId = c.nationalId;
-    // لتأمينات السفر: تعبئة اسم المؤمَّن عليه ورقمه من ملف العميل تلقائياً
     if (c.fullName) next.insuredName = c.fullName;
     if (c.customerNumber) next.insuredNo = c.customerNumber;
     setForm(next);
@@ -283,6 +315,14 @@ export function ServicePage({ config }: Props) {
           notes: form.notes,
           details,
         });
+        // تحديث الكاش المحلي فوراً
+        setCachedServices((prev) =>
+          prev.map((s) =>
+            s.id === editingId
+              ? { ...s, status, price, paid, remaining: price - paid, currency, paymentMethod: method, transferNo: form.transferNo, notes: form.notes, details }
+              : s
+          )
+        );
         toast.success(lang === "ar" ? "تم تحديث المعاملة بنجاح" : "Transaction updated successfully");
       } else {
         const result = await addService({
@@ -301,6 +341,7 @@ export function ServicePage({ config }: Props) {
           details,
         });
         if (result) {
+          setCachedServices((prev) => [result, ...prev]);
           toast.success(lang === "ar" ? "تم حفظ المعاملة بنجاح" : "Transaction saved successfully");
         } else {
           toast.error(lang === "ar" ? "فشل حفظ المعاملة" : "Failed to save transaction");
@@ -324,6 +365,9 @@ export function ServicePage({ config }: Props) {
     }
     try {
       await cancelService(cancelId, cancelReason.trim());
+      setCachedServices((prev) =>
+        prev.map((s) => (s.id === cancelId ? { ...s, status: "cancelled", cancelReason: cancelReason.trim() } : s))
+      );
       setCancelId(null);
       setCancelReason("");
       toast.success(lang === "ar" ? "تم إلغاء المعاملة" : "Transaction cancelled");
@@ -336,6 +380,7 @@ export function ServicePage({ config }: Props) {
     if (!deleteId) return;
     try {
       await deleteService(deleteId);
+      setCachedServices((prev) => prev.filter((s) => s.id !== deleteId));
       setDeleteId(null);
       toast.success(lang === "ar" ? "تم حذف المعاملة نهائياً" : "Transaction deleted permanently");
     } catch (err) {
@@ -343,8 +388,7 @@ export function ServicePage({ config }: Props) {
     }
   };
 
-  const printRecord = (record: (typeof services)[0]) => {
-    // طباعة عبر iframe خفي — يعمل على الهاتف والكمبيوتر بدون popup blockers
+  const printRecord = (record: (typeof storeServices)[0]) => {
     const invoice = invoices.find((inv) => inv.serviceId === record.id);
     if (invoice) {
       printViaIframe(`/api/print/invoice?id=${invoice.id}`)
@@ -356,7 +400,6 @@ export function ServicePage({ config }: Props) {
     setViewRecord(null);
   };
 
-  
   const exportCustomExcel = (type: string) => {
     if (!customFromDate || !customToDate) {
       toast.error(lang === "ar" ? "يرجى تحديد التاريخ من وإلى" : "Please select from and to dates");
@@ -384,8 +427,7 @@ export function ServicePage({ config }: Props) {
     toast.success(lang === "ar" ? "تم فتح تقرير PDF" : "PDF report opened");
   };
 
-const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
-    // تنزيل ملف Excel حقيقي عبر API
+  const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
     const url = `/api/export?type=services&serviceType=${config.serviceType}&period=${period}&format=excel`;
     const a = document.createElement("a");
     a.href = url;
@@ -397,7 +439,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
   };
 
   const exportPDF = (period: "weekly" | "monthly" | "yearly") => {
-    // فتح تقرير PDF في نافذة جديدة
     const url = `/api/export?type=services&serviceType=${config.serviceType}&period=${period}&format=pdf`;
     window.open(url, "_blank");
     toast.success(lang === "ar" ? "تم فتح تقرير PDF" : "PDF report opened");
@@ -457,7 +498,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
             </SelectContent>
           </Select>
           {err && <p className="text-xs text-destructive">{err}</p>}
-          {/* حقل إدخال نوع التأشيرة عند اختيار "إضافة نوع تأشيرة جديد" */}
           {f.name === "visaType" && val === "work_other" && (
             <div className="mt-2 space-y-1.5">
               <Label className="text-xs font-medium text-foreground">
@@ -569,46 +609,15 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
       ]
     : config.fields;
 
-  /**
-   * tableFields — الحقول المعروضة كأعمدة في الجدول.
-   *
-   * السبب الجذري للخطأ السابق: كان tableFields يأخذ أول 6 حقول من allFields
-   * بما في ذلك حقول العميل (customerName, customerNumber, passportNumber)
-   * التي لها fromCustomer. هذه الحقول:
-   *   1. تُنشئ تكراراً في رؤوس الأعمدة (عمود "اسم العميل" يظهر مرتين)
-   *   2. تقرأ من s.details[f.name] الذي لا يحتوي عليها (تُحفظ في حقول مستوى أعلى)
-   *   3. تعرض "—" بدلاً من القيمة الفعلية
-   *
-   * الإصلاح: استبعاد كل الحقول التي لها fromCustomer من tableFields،
-   * لأن بيانات العميل تُعرض في عمود مخصص (العمود الأول).
-   * كما نستبعد الحقول المالية التي لها أعمدة مخصصة (price/paid/remaining/currency).
-   *
-   * هذا الإصلاح في المكوّن المشترك، فينعكس على جميع الخدمات الـ 21 تلقائياً.
-   */
   const tableFields = allFields.filter((f) => {
-    // استبعاد حقول العميل (تُعرض في العمود الأول المخصص)
     if (f.fromCustomer) return false;
-    // استبعاد حقول العميل الصريحة حتى لو لم يكن لها fromCustomer
     if (["customerName", "customerNumber", "phoneNumber", "passportNumber", "cardNumber", "nationalId", "customerId"].includes(f.name)) return false;
-    // استبعاد الحقول المالية (لها أعمدة مخصصة في نهاية الجدول)
     if (["price", "paid", "remaining", "currency"].includes(f.name)) return false;
-    // استبعاد حقول لا تُعرض في الجدول
     if (f.hideInTable) return false;
     return true;
   }).slice(0, 5);
 
-  /**
-   * getFieldValue — دالة ربط قائمة على اسم الحقل (Field-Name-Based Mapping)
-   *
-   * تضمن أن كل حقل يقرأ من المصدر الصحيح:
-   *   - price/paid/remaining → حقول مستوى أعلى في سجل الخدمة
-   *   - currency → رمز العملة
-   *   - paymentMethod → تسمية مترجمة
-   *   - غير ذلك → s.details[f.name]
-   *
-   * هذا يمنع تبديل القيم بين الأعمدة.
-   */
-  const getFieldValue = (f: FieldDef, s: typeof services[0]): { display: string; isNumeric: boolean } => {
+  const getFieldValue = (f: FieldDef, s: typeof storeServices[0]): { display: string; isNumeric: boolean } => {
     let val: string | number | undefined;
     let isNumeric = false;
 
@@ -626,7 +635,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
     else if (f.name === "notes") { val = s.notes; }
     else { val = s.details?.[f.name]; }
 
-    // ترجمة قيم القوائم المنسدلة
     if (f.type === "select" && f.options && val) {
       const opt = f.options.find((o) => o.value === val);
       if (opt) val = tr(lang, opt.labelKey);
@@ -637,7 +645,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
     return { display: String(val), isNumeric };
   };
 
-  // تنبيه عند مغادرة النموذج بتغييرات غير محفوظة
   const handleDialogChange = (open: boolean) => {
     if (!open && formDirty) {
       if (!window.confirm(lang === "ar" ? "لديك تغييرات غير محفوظة. هل تريد المغادرة؟" : "You have unsaved changes. Leave anyway?")) {
@@ -650,7 +657,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
 
   return (
     <div className="space-y-5" dir={lang === "ar" ? "rtl" : "ltr"}>
-      {/* تصنيف الخدمة عنوان واضح في أعلى القسم */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{tr(lang, config.labelKey)}</h1>
@@ -659,7 +665,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* تصدير Excel أسبوعي/شهري */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="bg-background gap-2">
@@ -687,7 +692,7 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {/* تصدير PDF أسبوعي/شهري/سنوي */}
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="bg-background gap-2">
@@ -715,6 +720,7 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
           <Button
             className="gap-2 bg-gradient-to-r from-[#7C3AED] to-[#A855F7] hover:opacity-95 shadow-sm"
             onClick={openCreate}
@@ -725,7 +731,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
         </div>
       </div>
 
-      {/* Filters */}
       <Card className="border-border card-shadow">
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-3">
@@ -756,24 +761,19 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
         </CardContent>
       </Card>
 
-      {/* Table */}
       <Card className="border-border card-shadow">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  {/* العمود 1: اسم العميل فقط (مع رقم العميل كعنوان فرعي) */}
                   <TableHead className="text-xs font-semibold">{tr(lang, "customer_name")}</TableHead>
-                  {/* العمود 2: رقم هاتف العميل (مجلوب تلقائياً من ملف العميل) */}
                   <TableHead className="text-xs font-semibold">{tr(lang, "phone")}</TableHead>
-                  {/* الأعمدة الديناميكية: حقول تفاصيل الخدمة فقط (بدون حقول العميل) */}
                   {tableFields.map((f) => (
                     <TableHead key={f.name} className="text-xs font-semibold whitespace-nowrap">
                       {tr(lang, f.labelKey)}
                     </TableHead>
                   ))}
-                  {/* أعمدة مالية مخصصة: السعر، المدفوع، المتبقي */}
                   {config.withFinance && (
                     <>
                       <TableHead className="text-xs font-semibold whitespace-nowrap">{tr(lang, "price")}</TableHead>
@@ -786,7 +786,18 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.length === 0 ? (
+                {dataLoading && list.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={tableFields.length + 3 + (config.withFinance ? 3 : 0)} className="text-center py-16">
+                      <div className="flex flex-col items-center gap-3 text-indigo-600">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p className="text-sm font-medium animate-pulse">
+                          {lang === "ar" ? "جاري تحميل المعاملات بسرعة..." : "Loading transactions..."}
+                        </p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : list.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={tableFields.length + 3 + (config.withFinance ? 3 : 0)} className="text-center py-12">
                       <div className="flex flex-col items-center gap-3 text-muted-foreground">
@@ -806,22 +817,18 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
                 ) : (
                   list.map((s) => {
                     const sc = statusColors[s.status];
-                    // البحث عن بيانات العميل المرتبط (لعرض رقم العميل الصحيح)
                     const customer = customers.find((c) => c.id === s.customerId);
                     return (
                       <TableRow key={s.id} className="hover:bg-accent/30">
-                        {/* العمود 1: اسم العميل فقط + رقم العميل كعنوان فرعي */}
                         <TableCell>
                           <div className="font-medium text-foreground text-sm">{s.customerName}</div>
                           <div className="text-[11px] text-muted-foreground num">
                             {customer?.customerNumber ?? "—"}
                           </div>
                         </TableCell>
-                        {/* العمود 2: رقم هاتف العميل (مجلوب تلقائياً من ملف العميل) */}
                         <TableCell className="text-xs text-muted-foreground num whitespace-nowrap">
                           {customer?.phoneNumber ?? "—"}
                         </TableCell>
-                        {/* الأعمدة الديناميكية: قيم من s.details أو مصدر مخصص حسب اسم الحقل */}
                         {tableFields.map((f) => {
                           const { display, isNumeric } = getFieldValue(f, s);
                           return (
@@ -830,7 +837,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
                             </TableCell>
                           );
                         })}
-                        {/* أعمدة مالية مخصصة */}
                         {config.withFinance && (
                           <>
                             <TableCell className="text-sm font-bold text-foreground num whitespace-nowrap">
@@ -855,16 +861,13 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
                           )}
                         </TableCell>
                         <TableCell className="text-end">
-                          {/* ترتيب الإجراءات: معاينة ← إلغاء ← حذف ← تعديل ← طباعة */}
                           <div className="flex items-center justify-end gap-1">
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" title={tr(lang, "action_preview")} onClick={() => setViewRecord(s)}>
                               <Eye className="w-4 h-4" />
                             </Button>
-                            {/* إلغاء المعاملة — يغيّر الحالة إلى ملغية، السجل يبقى محفوظاً */}
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-orange-500" title={lang === "ar" ? "إلغاء المعاملة" : "Cancel Transaction"} onClick={() => { setCancelId(s.id); setCancelReason(""); }}>
                               <Ban className="w-4 h-4" />
                             </Button>
-                            {/* حذف المعاملة — يحذف السجل نهائياً، للمدير العام فقط */}
                             {currentUser?.role === "manager" && (
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title={lang === "ar" ? "حذف المعاملة نهائياً" : "Delete Permanently"} onClick={() => setDeleteId(s.id)}>
                                 <Trash2 className="w-4 h-4" />
@@ -888,7 +891,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
         </CardContent>
       </Card>
 
-      {/* Create/Edit dialog — مع تحذير مغادرة بتغييرات غير محفوظة */}
       <Dialog open={open} onOpenChange={handleDialogChange}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -909,7 +911,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
         </DialogContent>
       </Dialog>
 
-      {/* View dialog */}
       <Dialog open={!!viewRecord} onOpenChange={(o) => !o && setViewRecord(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1005,7 +1006,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
         </DialogContent>
       </Dialog>
 
-      {/* Cancel dialog — سبب إلغاء إلزامي */}
       <AlertDialog open={!!cancelId} onOpenChange={(o) => { if (!o) { setCancelId(null); setCancelReason(""); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1035,7 +1035,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete dialog — حذف نهائي (المدير العام فقط) */}
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1058,7 +1057,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* تصدير حسب التاريخ — نافذة منبثقة */}
       <Dialog open={customDateOpen} onOpenChange={setCustomDateOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -1089,7 +1087,6 @@ const exportExcel = (period: "weekly" | "monthly" | "yearly") => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }
