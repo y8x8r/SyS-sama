@@ -67,37 +67,39 @@ export function CustomersPage() {
   const isLoadingMore = useAppStore((s) => s.customersLoadingMore);
   const fetchMoreCustomers = useAppStore((s) => s.fetchMoreCustomers);
 
-  // ذاكرة تخزين مؤقتة سريعة جداً تمنع الانتظار عند التحديث
   const [cachedCustomers, setCachedCustomers] = useState<any[]>([]);
 
-  // قراءة الكاش المحلي فور فتح الصفحة (0.01 ثانية)
+  // تحميل الكاش بأمان بعد اكتمال جاهزية المتصفح (تجنب خطأ SSR على Vercel)
   useEffect(() => {
-    try {
-      const cached = localStorage.getItem("sys_sama_customers_cache");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCachedCustomers(parsed);
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
-  // مزامنة الكاش وتحديثه تلقائياً عند وصول البيانات الطازجة من السيرفر
-  useEffect(() => {
-    if (storeCustomers && storeCustomers.length > 0) {
-      setCachedCustomers(storeCustomers);
+    if (typeof window !== "undefined") {
       try {
-        localStorage.setItem("sys_sama_customers_cache", JSON.stringify(storeCustomers));
+        const cached = window.localStorage.getItem("sys_sama_customers_cache");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCachedCustomers(parsed);
+          }
+        }
       } catch (e) {
         console.error(e);
       }
     }
+  }, []);
+
+  // تحديث الكاش تلقائياً فور وصول البيانات الطازجة من السيرفر
+  useEffect(() => {
+    if (storeCustomers && storeCustomers.length > 0) {
+      setCachedCustomers(storeCustomers);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem("sys_sama_customers_cache", JSON.stringify(storeCustomers));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
   }, [storeCustomers]);
 
-  // استخدام بيانات السيرفر إن وُجدت، أو الكاش اللحظي أثناء انتظار السيرفر
   const effectiveCustomers = storeCustomers.length > 0 ? storeCustomers : cachedCustomers;
 
   const [search, setSearch] = useState("");
@@ -190,7 +192,6 @@ export function CustomersPage() {
     if (!deleteId) return;
     try {
       await deleteCustomer(deleteId);
-      // تحديث فوري للكاش
       setCachedCustomers((prev) => prev.filter((c) => c.id !== deleteId));
       setDeleteId(null);
       toast.success(lang === "ar" ? "تم حذف العميل" : "Customer deleted");
@@ -267,7 +268,6 @@ export function CustomersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* تصدير Excel أسبوعي/شهري */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="bg-background gap-2">
@@ -296,7 +296,6 @@ export function CustomersPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* تصدير PDF أسبوعي/شهري/سنوي */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="bg-background gap-2">
@@ -365,7 +364,6 @@ export function CustomersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {/* لا يظهر مؤشر الانتظار إلا في أول زيارة على الإطلاق إذا لم يكن هناك كاش نهائياً */}
                 {dataLoading && effectiveCustomers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-16">
@@ -433,7 +431,6 @@ export function CustomersPage() {
             </Table>
           </div>
 
-          {/* زر تحميل المزيد */}
           {!search.trim() && hasMore && list.length > 0 && (
             <div className="flex justify-center p-6 border-t border-border bg-muted/10">
               <Button
@@ -459,7 +456,6 @@ export function CustomersPage() {
         </CardContent>
       </Card>
 
-      {/* Dialog الإضافة والتعديل */}
       <Dialog open={open} onOpenChange={handleDialogChange}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
@@ -501,7 +497,6 @@ export function CustomersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirm */}
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -517,7 +512,6 @@ export function CustomersPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* تصدير حسب التاريخ */}
       <Dialog open={customDateOpen} onOpenChange={setCustomDateOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
