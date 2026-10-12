@@ -122,13 +122,14 @@ export function ServicePage({ config }: Props) {
   const setPage = useAppStore((s) => s.setPage);
   const dataLoading = useAppStore((s) => s.dataLoading);
 
-  // كاش محلي فوري لمنع الانتظار عند فتح الصفحة أو التحديث
   const [cachedServices, setCachedServices] = useState<any[]>([]);
+  const [mounted, setMounted] = useState(false);
 
-  // تحميل الكاش بأمان عند أول تحميل للمتصفح
+  // قراءة الكاش المحلي بعد اكتمال تحميل الواجهة بالكامل (متوافق 100% مع Vercel)
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
+    setMounted(true);
+    try {
+      if (typeof window !== "undefined") {
         const cached = window.localStorage.getItem("sys_sama_services_cache");
         if (cached) {
           const parsed = JSON.parse(cached);
@@ -136,28 +137,30 @@ export function ServicePage({ config }: Props) {
             setCachedServices(parsed);
           }
         }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  // تحديث الكاش تلقائياً عندما تتحدث بيانات المتجر
+  useEffect(() => {
+    if (storeServices && storeServices.length > 0) {
+      setCachedServices(storeServices);
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem("sys_sama_services_cache", JSON.stringify(storeServices));
+        }
       } catch (e) {
         console.error(e);
       }
     }
-  }, []);
-
-  // تحديث الكاش تلقائياً عندما تصل البيانات الطازجة من السيرفر
-  useEffect(() => {
-    if (storeServices && storeServices.length > 0) {
-      setCachedServices(storeServices);
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem("sys_sama_services_cache", JSON.stringify(storeServices));
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    }
   }, [storeServices]);
 
-  // البيانات الفعالة: الحية إن وُجدت، أو الكاش اللحظي
-  const effectiveServices = storeServices.length > 0 ? storeServices : cachedServices;
+  // البيانات الفعالة تمنع الانتظار اللحظي
+  const effectiveServices = (mounted && storeServices.length === 0 && cachedServices.length > 0)
+    ? cachedServices
+    : storeServices;
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -315,14 +318,6 @@ export function ServicePage({ config }: Props) {
           notes: form.notes,
           details,
         });
-        // تحديث الكاش المحلي فوراً
-        setCachedServices((prev) =>
-          prev.map((s) =>
-            s.id === editingId
-              ? { ...s, status, price, paid, remaining: price - paid, currency, paymentMethod: method, transferNo: form.transferNo, notes: form.notes, details }
-              : s
-          )
-        );
         toast.success(lang === "ar" ? "تم تحديث المعاملة بنجاح" : "Transaction updated successfully");
       } else {
         const result = await addService({
@@ -341,7 +336,6 @@ export function ServicePage({ config }: Props) {
           details,
         });
         if (result) {
-          setCachedServices((prev) => [result, ...prev]);
           toast.success(lang === "ar" ? "تم حفظ المعاملة بنجاح" : "Transaction saved successfully");
         } else {
           toast.error(lang === "ar" ? "فشل حفظ المعاملة" : "Failed to save transaction");
@@ -365,9 +359,6 @@ export function ServicePage({ config }: Props) {
     }
     try {
       await cancelService(cancelId, cancelReason.trim());
-      setCachedServices((prev) =>
-        prev.map((s) => (s.id === cancelId ? { ...s, status: "cancelled", cancelReason: cancelReason.trim() } : s))
-      );
       setCancelId(null);
       setCancelReason("");
       toast.success(lang === "ar" ? "تم إلغاء المعاملة" : "Transaction cancelled");
@@ -380,7 +371,6 @@ export function ServicePage({ config }: Props) {
     if (!deleteId) return;
     try {
       await deleteService(deleteId);
-      setCachedServices((prev) => prev.filter((s) => s.id !== deleteId));
       setDeleteId(null);
       toast.success(lang === "ar" ? "تم حذف المعاملة نهائياً" : "Transaction deleted permanently");
     } catch (err) {
