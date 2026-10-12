@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { tr } from "@/lib/translations";
 import { Card, CardContent } from "@/components/ui/card";
@@ -55,17 +55,50 @@ import {
 
 export function CustomersPage() {
   const lang = useAppStore((s) => s.lang);
-  const customers = useAppStore((s) => s.customers);
+  const storeCustomers = useAppStore((s) => s.customers);
   const services = useAppStore((s) => s.services);
   const addCustomer = useAppStore((s) => s.addCustomer);
   const updateCustomer = useAppStore((s) => s.updateCustomer);
   const deleteCustomer = useAppStore((s) => s.deleteCustomer);
   const dataLoading = useAppStore((s) => s.dataLoading);
-  
+
   // دوال ومتغيرات التقسيم (Pagination)
   const hasMore = useAppStore((s) => s.customersHasMore);
   const isLoadingMore = useAppStore((s) => s.customersLoadingMore);
   const fetchMoreCustomers = useAppStore((s) => s.fetchMoreCustomers);
+
+  // ذاكرة تخزين مؤقتة سريعة جداً تمنع الانتظار عند التحديث
+  const [cachedCustomers, setCachedCustomers] = useState<any[]>([]);
+
+  // قراءة الكاش المحلي فور فتح الصفحة (0.01 ثانية)
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem("sys_sama_customers_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCachedCustomers(parsed);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  // مزامنة الكاش وتحديثه تلقائياً عند وصول البيانات الطازجة من السيرفر
+  useEffect(() => {
+    if (storeCustomers && storeCustomers.length > 0) {
+      setCachedCustomers(storeCustomers);
+      try {
+        localStorage.setItem("sys_sama_customers_cache", JSON.stringify(storeCustomers));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [storeCustomers]);
+
+  // استخدام بيانات السيرفر إن وُجدت، أو الكاش اللحظي أثناء انتظار السيرفر
+  const effectiveCustomers = storeCustomers.length > 0 ? storeCustomers : cachedCustomers;
 
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -87,16 +120,16 @@ export function CustomersPage() {
   const [customToDate, setCustomToDate] = useState("");
 
   const list = useMemo(() => {
-    if (!search.trim()) return customers;
+    if (!search.trim()) return effectiveCustomers;
     const q = search.toLowerCase();
-    return customers.filter(
+    return effectiveCustomers.filter(
       (c) =>
-        c.fullName.toLowerCase().includes(q) ||
-        c.customerNumber.toLowerCase().includes(q) ||
-        c.phoneNumber.toLowerCase().includes(q) ||
+        (c.fullName ?? "").toLowerCase().includes(q) ||
+        (c.customerNumber ?? "").toLowerCase().includes(q) ||
+        (c.phoneNumber ?? "").toLowerCase().includes(q) ||
         (c.passportNumber ?? "").toLowerCase().includes(q)
     );
-  }, [customers, search]);
+  }, [effectiveCustomers, search]);
 
   const openCreate = () => {
     setForm({ fullName: "", phoneNumber: "", passportNumber: "", nationalId: "", cardNumber: "", referralSource: "" });
@@ -106,7 +139,7 @@ export function CustomersPage() {
     setOpen(true);
   };
 
-  const openEdit = (c: typeof customers[0]) => {
+  const openEdit = (c: any) => {
     setForm({
       fullName: c.fullName,
       phoneNumber: c.phoneNumber,
@@ -157,6 +190,8 @@ export function CustomersPage() {
     if (!deleteId) return;
     try {
       await deleteCustomer(deleteId);
+      // تحديث فوري للكاش
+      setCachedCustomers((prev) => prev.filter((c) => c.id !== deleteId));
       setDeleteId(null);
       toast.success(lang === "ar" ? "تم حذف العميل" : "Customer deleted");
     } catch (err) {
@@ -228,7 +263,7 @@ export function CustomersPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">{tr(lang, "nav_customers")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {lang === "ar" ? `إجمالي العملاء المعروضين: ${customers.length}` : `Displayed customers: ${customers.length}`}
+            {lang === "ar" ? `إجمالي العملاء المعروضين: ${effectiveCustomers.length}` : `Displayed customers: ${effectiveCustomers.length}`}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -260,6 +295,7 @@ export function CustomersPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
           {/* تصدير PDF أسبوعي/شهري/سنوي */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -288,6 +324,7 @@ export function CustomersPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
           <Button
             className="bg-gradient-to-r from-[#7C3AED] to-[#A855F7] hover:opacity-95 gap-2 shadow-sm"
             onClick={openCreate}
@@ -328,7 +365,8 @@ export function CustomersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {dataLoading && list.length === 0 ? (
+                {/* لا يظهر مؤشر الانتظار إلا في أول زيارة على الإطلاق إذا لم يكن هناك كاش نهائياً */}
+                {dataLoading && effectiveCustomers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-16">
                       <div className="flex flex-col items-center gap-3 text-indigo-600">
@@ -358,7 +396,7 @@ export function CustomersPage() {
                         <TableCell>
                           <div className="flex items-center gap-2.5">
                             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pastel-lilac to-pastel-lilac flex items-center justify-center text-pastel-lilac font-bold text-sm">
-                              {c.fullName.charAt(0)}
+                              {c.fullName ? c.fullName.charAt(0) : "—"}
                             </div>
                             <div>
                               <div className="font-medium text-foreground text-sm">{c.fullName}</div>
@@ -394,8 +432,8 @@ export function CustomersPage() {
               </TableBody>
             </Table>
           </div>
-          
-          {/* زر تحميل المزيد يظهر فقط إذا لم نكن نبحث وفي حال وجود بيانات إضافية وتم جلب الدفعة الأولى */}
+
+          {/* زر تحميل المزيد */}
           {!search.trim() && hasMore && list.length > 0 && (
             <div className="flex justify-center p-6 border-t border-border bg-muted/10">
               <Button
@@ -421,7 +459,7 @@ export function CustomersPage() {
         </CardContent>
       </Card>
 
-      {/* Create/Edit dialog */}
+      {/* Dialog الإضافة والتعديل */}
       <Dialog open={open} onOpenChange={handleDialogChange}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
@@ -432,25 +470,25 @@ export function CustomersPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
             <div className="space-y-1.5 sm:col-span-2">
               <Label>{tr(lang, "f_customer_name")} *</Label>
-              <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className="bg-background" />
+              <Input value={form.fullName} onChange={(e) => { setForm({ ...form, fullName: e.target.value }); setFormDirty(true); }} className="bg-background" />
               {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>{tr(lang, "f_phone")} *</Label>
-              <Input value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} className="bg-background" />
+              <Input value={form.phoneNumber} onChange={(e) => { setForm({ ...form, phoneNumber: e.target.value }); setFormDirty(true); }} className="bg-background" />
               {errors.phoneNumber && <p className="text-xs text-destructive">{errors.phoneNumber}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>{tr(lang, "passport_number")}</Label>
-              <Input value={form.passportNumber} onChange={(e) => setForm({ ...form, passportNumber: e.target.value })} className="bg-background" />
+              <Input value={form.passportNumber} onChange={(e) => { setForm({ ...form, passportNumber: e.target.value }); setFormDirty(true); }} className="bg-background" />
             </div>
             <div className="space-y-1.5">
               <Label>{tr(lang, "f_card_number")}</Label>
-              <Input value={form.cardNumber} onChange={(e) => setForm({ ...form, cardNumber: e.target.value })} className="bg-background" />
+              <Input value={form.cardNumber} onChange={(e) => { setForm({ ...form, cardNumber: e.target.value }); setFormDirty(true); }} className="bg-background" />
             </div>
             <div className="space-y-1.5">
               <Label>{tr(lang, "customer_referral")}</Label>
-              <Input value={form.referralSource} onChange={(e) => setForm({ ...form, referralSource: e.target.value })} className="bg-background" placeholder={lang === "ar" ? "توصية، إعلان..." : "Referral, ad..."} />
+              <Input value={form.referralSource} onChange={(e) => { setForm({ ...form, referralSource: e.target.value }); setFormDirty(true); }} className="bg-background" placeholder={lang === "ar" ? "توصية، إعلان..." : "Referral, ad..."} />
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-2">
